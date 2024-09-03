@@ -85,8 +85,32 @@ topics = {
     ]
 }
 
+articles = [
+    {
+        "question": "What is the article for 'Apfel' (apple)? 🍎",
+        "options": ["der Apfel", "die Apfel", "das Apfel"],
+        "answer": "der Apfel"
+    },
+    {
+        "question": "What is the article for 'Banane' (banana)? 🍌",
+        "options": ["der Banane", "die Banane", "das Banane"],
+        "answer": "die Banane"
+    },
+    {
+        "question": "What is the article for 'Haus' (house)? 🏠",
+        "options": ["der Haus", "die Haus", "das Haus"],
+        "answer": "das Haus"
+    },
+    {
+        "question": "What is the article for 'Tisch' (table)? 🪑",
+        "options": ["der Tisch", "die Tisch", "das Tisch"],
+        "answer": "der Tisch"
+    }
+]
+
 current_question = {}
 current_topic = {}
+current_section = {}
 user_scores = {}  # To track user scores
 
 def get_degree(score, total_questions):
@@ -101,12 +125,33 @@ def get_degree(score, total_questions):
         return "😢 Poor 😢"
 
 async def start(update: Update, context: CallbackContext) -> None:
-    keyboard = [[InlineKeyboardButton(topic, callback_data=topic)] for topic in topics.keys()]
+    keyboard = [
+        [InlineKeyboardButton("Vocabulary", callback_data="Vocabulary")],
+        [InlineKeyboardButton("Articles", callback_data="Articles")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        '👋 Hi there! Welcome to the German Language Quiz! Choose a topic to start the quiz.',
+        '👋 Hi there! Welcome to the German Language Quiz! Choose a section to start.',
         reply_markup=reply_markup
     )
+
+async def select_section(update: Update, context: CallbackContext) -> None:
+    global current_section
+    user_id = update.effective_user.id
+    current_section[user_id] = update.callback_query.data
+
+    if current_section[user_id] == "Vocabulary":
+        keyboard = [[InlineKeyboardButton(topic, callback_data=topic)] for topic in topics.keys()]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.callback_query.message.edit_text(
+            'Select a category:',
+            reply_markup=reply_markup
+        )
+    elif current_section[user_id] == "Articles":
+        current_topic[user_id] = "Articles"
+        current_question[user_id] = 0
+        user_scores[user_id] = 0  # Initialize score for new quiz
+        await send_question(update, context)
 
 async def select_topic(update: Update, context: CallbackContext) -> None:
     global current_topic, current_question
@@ -115,23 +160,22 @@ async def select_topic(update: Update, context: CallbackContext) -> None:
     current_question[user_id] = 0
     user_scores[user_id] = 0  # Initialize score for new quiz
 
-    question_data = topics.get(current_topic[user_id])
-    if not question_data:
-        await update.callback_query.message.reply_text("❌ Invalid topic selected. Please try again.")
-        return
-    
     await send_question(update, context)
 
 async def send_question(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
+    section = current_section.get(user_id)
     topic = current_topic.get(user_id)
     
-    if topic is None:
-        await update.callback_query.message.reply_text("Please choose a topic first.")
+    if section is None:
+        await update.callback_query.message.reply_text("Please select a section first.")
         return
-
-    question_index = current_question.get(user_id, 0)
-    question_data = topics[topic][question_index]
+    
+    if section == "Articles":
+        question_data = articles[current_question[user_id]]
+    else:
+        question_data = topics[topic][current_question[user_id]]
+    
     keyboard = [[InlineKeyboardButton(option, callback_data=option)] for option in question_data['options']]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.callback_query.message.edit_text(
@@ -141,14 +185,18 @@ async def send_question(update: Update, context: CallbackContext) -> None:
 
 async def handle_answer(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
+    section = current_section.get(user_id)
     topic = current_topic.get(user_id)
 
-    if topic is None:
-        await update.callback_query.message.reply_text("Please select a topic to start the quiz.")
+    if section is None:
+        await update.callback_query.message.reply_text("Please select a section to start the quiz.")
         return
 
-    question_index = current_question.get(user_id, 0)
-    question_data = topics[topic][question_index]
+    if section == "Articles":
+        question_data = articles[current_question[user_id]]
+    else:
+        question_data = topics[topic][current_question[user_id]]
+    
     selected_option = update.callback_query.data
 
     if selected_option == question_data['answer']:
@@ -158,15 +206,16 @@ async def handle_answer(update: Update, context: CallbackContext) -> None:
         await update.callback_query.message.reply_text("❌ Incorrect! ❌")
 
     current_question[user_id] += 1
-    if current_question[user_id] < len(topics[topic]):
+    if current_question[user_id] < (len(articles) if section == "Articles" else len(topics[topic])):
         await send_question(update, context)
     else:
         score = user_scores.get(user_id, 0)
-        degree = get_degree(score, len(topics[topic]))
+        degree = get_degree(score, len(articles) if section == "Articles" else len(topics[topic]))
         await update.callback_query.message.reply_text(
-            f"🎊 Quiz completed! 🎊\n\nYou got {score}/{len(topics[topic])} correct answers.\nYour degree: {degree} 🏆\n\nWould you like to try another topic?",
+            f"🎊 Quiz completed! 🎊\n\nYou got {score}/{len(articles) if section == 'Articles' else len(topics[topic])} correct answers.\nYour degree: {degree} 🏆\n\nWould you like to try another section?",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(topic, callback_data=topic)] for topic in topics.keys()
+                [InlineKeyboardButton("Vocabulary", callback_data="Vocabulary")],
+                [InlineKeyboardButton("Articles", callback_data="Articles")]
             ])
         )
         # Optionally reset the topic and score if needed for the next quiz session
@@ -177,6 +226,7 @@ def main() -> None:
     application = Application.builder().token("7319290683:AAGTWkwCFruMRywgFFAMl2baZFyhBOJRVxs").build()
 
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CallbackQueryHandler(select_section, pattern='^(Vocabulary|Articles)$'))
     application.add_handler(CallbackQueryHandler(select_topic, pattern='^(Colors|Numbers|Animals)$'))
     application.add_handler(CallbackQueryHandler(handle_answer))
 
