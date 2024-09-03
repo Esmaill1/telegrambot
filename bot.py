@@ -174,7 +174,7 @@ async def handle_answer(update: Update, context: CallbackContext) -> None:
         del user_scores[user_id]
 
 def main() -> None:
-    application = Application.builder().token("5016720348:AAGFntC9rDmck80k0vG0hHdA07RlieW4RGE").build()
+    application = Application.builder().token("7319290683:AAGTWkwCFruMRywgFFAMl2baZFyhBOJRVxs").build()
 
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CallbackQueryHandler(select_topic, pattern='^(Colors|Numbers|Animals)$'))
